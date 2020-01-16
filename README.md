@@ -2,6 +2,14 @@
 
 This repository contains Openshift Proof of Concept for the Elastic Stack (ElasticSearch, LogStash, Kibana).
 
+## Directory Structure
+
+    .github/                   - PR and Issue templates
+    openshift/                 - OpenShift-deployment specific files
+    CODE-OF-CONDUCT.md         - Code of Conduct
+    CONTRIBUTING.md            - Contributing Guidelines
+    LICENSE                    - License
+
 ## Documentation
 
 * [Certificate Setup](certificate-setup.md)
