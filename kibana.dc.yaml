@@ -1,0 +1,183 @@
+---
+apiVersion: v1
+kind: Template
+labels:
+  app: ${APP_NAME}-${INSTANCE}
+  env: ${LABEL_ENV}
+  role: ${APP_NAME}
+  template: ${APP_NAME}-${INSTANCE}-template
+metadata:
+  name: ${APP_NAME}-${INSTANCE}-template
+objects:
+  - apiVersion: v1
+    kind: ConfigMap
+    metadata:
+      name: ${APP_NAME}-${INSTANCE}-config
+    data:
+      kibana.yml: |
+        server.ssl:
+          enabled: false
+          #key: /usr/share/kibana/config/certs/elastic-certificate.pem
+          #certificate: /usr/share/kibana/config/certs/elastic-certificate.pem
+          #clientAuthentication: optional
+        xpack.security.encryptionKey: ${KIBANA_ENCRYPTION_KEY}
+        xpack.security.authc.providers: [basic]
+        elasticsearch.username: "${ELASTICSEARCH_USERNAME}"
+        elasticsearch.password: "${ELASTICSEARCH_PASSWORD}"
+        elasticsearch.ssl:
+          certificateAuthorities: /usr/share/kibana/config/certs/elastic-certificate.pem
+          verificationMode: certificate
+
+  - apiVersion: v1
+    kind: Service
+    metadata:
+      name: ${APP_NAME}-${INSTANCE}
+    spec:
+      ports:
+        - name: http
+          port: 5601
+          protocol: TCP
+          targetPort: 5601
+      selector:
+        app: ${APP_NAME}-${INSTANCE}
+        env: ${LABEL_ENV}
+        role: ${APP_NAME}
+
+  - apiVersion: v1
+    kind: Deployment
+    metadata:
+      name: ${APP_NAME}-${INSTANCE}
+    spec:
+      replicas: 1
+      selector:
+        matchLabels:
+          app: ${APP_NAME}-${INSTANCE}
+          env: ${LABEL_ENV}
+          role: ${APP_NAME}
+      strategy:
+        type: Recreate
+      template:
+        metadata:
+          labels:
+            app: ${APP_NAME}-${INSTANCE}
+            env: ${LABEL_ENV}
+            role: ${APP_NAME}
+        spec:
+          containers:
+            - env:
+                - name: ELASTICSEARCH_HOSTS
+                  value: ${ELASTICSEARCH_HOST}
+                - name: SERVER_HOST
+                  value: 0.0.0.0
+                - name: ELASTICSEARCH_USERNAME
+                  valueFrom:
+                    secretKeyRef:
+                      key: username
+                      name: ${APP_NAME}-${INSTANCE}-credentials
+                - name: ELASTICSEARCH_PASSWORD
+                  valueFrom:
+                    secretKeyRef:
+                      key: password
+                      name: ${APP_NAME}-${INSTANCE}-credentials
+                - name: KIBANA_ENCRYPTION_KEY
+                  valueFrom:
+                    secretKeyRef:
+                      key: encryptionkey
+                      name: kibana
+              image: elastic/kibana:${ELASTIC_VERSION}
+              imagePullPolicy: IfNotPresent
+              name: ${APP_NAME}
+              ports:
+                - containerPort: 5601
+              readinessProbe:
+                exec:
+                  command:
+                    - sh
+                    - -c
+                    - |
+                      #!/usr/bin/env bash -e
+                      http () {
+                          local path="${1}"
+                          set -- -XGET -s --fail
+
+                          if [ -n "${ELASTICSEARCH_USERNAME}" ] && [ -n "${ELASTICSEARCH_PASSWORD}" ]; then
+                            set -- "$@" -u "${ELASTICSEARCH_USERNAME}:${ELASTICSEARCH_PASSWORD}"
+                          fi
+
+                          STATUS=$(curl --output /dev/null --write-out "%{http_code}" -k "$@" "http://localhost:5601${path}")
+                          if [[ "${STATUS}" -eq 200 ]]; then
+                            exit 0
+                          fi
+
+                          echo "Error: Got HTTP code ${STATUS} but expected a 200"
+                          exit 1
+                      }
+
+                      http "/app/kibana"
+                failureThreshold: 3
+                initialDelaySeconds: 10
+                periodSeconds: 10
+                successThreshold: 3
+                timeoutSeconds: 5
+              resources:
+                limits:
+                  cpu: "${CPU_LIMIT}"
+                  memory: "${MEMORY_LIMIT}"
+                requests:
+                  cpu: "${CPU_REQUEST}"
+                  memory: "${MEMORY_REQUEST}"
+              volumeMounts:
+                - mountPath: /usr/share/kibana/config/certs
+                  name: elastic-certificate-pem
+                - mountPath: /usr/share/kibana/config/kibana.yml
+                  name: kibanaconfig
+                  subPath: kibana.yml
+          volumes:
+            - name: elastic-certificate-pem
+              secret:
+                secretName: ${APP_NAME}-${INSTANCE}-certificate-pem
+            - configMap:
+                name: release-name-kibana-config
+              name: kibanaconfig
+parameters:
+  - name: APP_NAME
+    description: Application name
+    displayName: Application name
+    required: true
+    value: kibana
+  - name: ELASTIC_VERSION
+    description: Application version of Elastic Stack in string format
+    displayName: Application version
+    required: true
+    value: "7.5.1"
+  - name: LABEL_ENV
+    description: Deployment environment 
+    displayName: Environment
+    required: true
+    value: dev
+  - name: INSTANCE
+    description: The deployment instance name
+    displayName: Deployment Instance
+    required: true
+    value: master
+  - name: ELASTICSEARCH_HOST
+    description: The Elasticsearch endpoint. This url needs to be defined with a port and protocol.
+    displayName: Elasticsearch Host Endpoint
+    required: true
+    value: https://elasticsearch-master:9200
+  - name: CPU_LIMIT
+    description: Limit Peak CPU per pod (in millicores ex. 1000m)
+    displayName: CPU Limit
+    value: 1000m
+  - name: CPU_REQUEST
+    description: Requested CPU per pod (in millicores ex. 500m)
+    displayName: CPU Request
+    value: 100m
+  - name: MEMORY_LIMIT
+    description: Limit Peak Memory per pod (in gigabytes Gi or megabytes Mi ex. 2Gi)
+    displayName: Memory Limit
+    value: 1Gi
+  - name: MEMORY_REQUEST
+    description: Requested Memory per pod (in gigabytes Gi or megabytes Mi ex. 500Mi)
+    displayName: Memory Request
+    value: 512Mi

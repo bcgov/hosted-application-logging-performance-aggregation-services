@@ -1,0 +1,340 @@
+---
+apiVersion: v1
+kind: Template
+labels:
+  app: ${APP_NAME}-${INSTANCE}
+  env: ${LABEL_ENV}
+  role: ${APP_NAME}
+  template: ${APP_NAME}-${INSTANCE}-template
+metadata:
+  name: ${APP_NAME}-${INSTANCE}-template
+objects:
+  - apiVersion: v1
+    kind: ConfigMap
+    metadata:
+      name: ${APP_NAME}-${INSTANCE}-config
+    data:
+      logstash.yml: |
+        xpack.monitoring.enabled: true
+        xpack.monitoring.elasticsearch.hosts: ["https://elasticsearch-master:9200"]
+        xpack.monitoring.elasticsearch.username: "${ELASTICSEARCH_USERNAME}"
+        xpack.monitoring.elasticsearch.password: "${ELASTICSEARCH_PASSWORD}"
+        xpack.monitoring.elasticsearch.sniffing: false
+        xpack.monitoring.elasticsearch.ssl.verification_mode: certificate
+        xpack.monitoring.elasticsearch.ssl.certificate_authority: /usr/share/logstash/config/certs/elastic-ca.pem
+  
+  - apiVersion: v1
+    kind: ConfigMap
+    metadata:
+      name: ${APP_NAME}-${INSTANCE}-pipeline
+    data:
+      filter-json.conf: |
+        filter {
+          json {
+            source => "message"
+            skip_on_invalid_json => true
+            target => "clogs"
+          }
+        }
+      in-beats.conf: |
+        input {
+          beats {
+            id => "Default Beats"
+            type => "default-beat"
+            port => 5044
+          }
+        }
+      in-http.conf: |
+        input {
+          http {
+            id => "Default Http"
+            type => "default-http"
+            port => 8080
+          }
+        }
+      in-tcp.conf: |
+        input {
+          tcp {
+            id => "Default Tcp"
+            type => "default-tcp"
+            port => 11024
+          }
+        }
+      in-uptime.conf: |
+        input {
+          exec {
+            id => "Default Uptime"
+            type => "default-uptime"
+            command => "uptime"
+            interval => 30
+          }
+        }
+      out-elasticsearch.conf: |
+        output {
+          elasticsearch {
+            hosts => ["elasticsearch-master"]
+            user => "${ELASTICSEARCH_USERNAME}"
+            password => "${ELASTICSEARCH_PASSWORD}"
+            ssl => true
+            ssl_certificate_verification => true
+            cacert => "/usr/share/logstash/config/certs/elastic-ca.pem"
+            action => "index"
+            index => "logstash-%{+YYYY.MM.dd}"
+          }
+        }
+      out-std.conf: |
+        output {
+          stdout { }
+        } 
+
+  - apiVersion: v1
+    kind: Service
+    metadata:
+      name: ${APP_NAME}-${INSTANCE}-beats
+    spec:
+      ports:
+        - name: beats-plugin
+          port: 5044
+          protocol: TCP
+          targetPort: 5044
+      selector:
+        app: ${APP_NAME}-${INSTANCE}
+        env: ${LABEL_ENV}
+        role: ${APP_NAME}
+
+  - apiVersion: v1
+    kind: Service
+    metadata:
+      name: ${APP_NAME}-${INSTANCE}-beats-http-plugin
+    spec:
+      ports:
+        - name: http-plugin
+          port: 8080
+          protocol: TCP
+          targetPort: 8080
+      selector:
+        app: ${APP_NAME}-${INSTANCE}
+        env: ${LABEL_ENV}
+        role: ${APP_NAME}
+
+  - apiVersion: v1
+    kind: Service
+    metadata:
+      name: ${APP_NAME}-${INSTANCE}-tcp-plugin
+    spec:
+      ports:
+        - name: tcp-plugin
+          port: 11024
+          protocol: TCP
+          targetPort: 11024
+      selector:
+        app: ${APP_NAME}-${INSTANCE}
+        env: ${LABEL_ENV}
+        role: ${APP_NAME}
+
+  - apiVersion: apps/v1
+    kind: StatefulSet
+    metadata:
+      name: ${APP_NAME}-${INSTANCE}
+    spec:
+      podManagementPolicy: Parallel
+      replicas: 1
+      selector:
+        matchLabels:
+          app: ${APP_NAME}-${INSTANCE}
+          env: ${LABEL_ENV}
+          role: ${APP_NAME}
+      serviceName: ${APP_NAME}-${INSTANCE}
+      template:
+        metadata:
+          labels:
+            app: ${APP_NAME}-${INSTANCE}
+            env: ${LABEL_ENV}
+            role: ${APP_NAME}
+          name: ${APP_NAME}-${INSTANCE}
+        spec:
+          affinity:
+            podAntiAffinity:
+              requiredDuringSchedulingIgnoredDuringExecution:
+                - labelSelector:
+                    matchExpressions:
+                      - key: app
+                        operator: In
+                        values:
+                          - ${APP_NAME}-${INSTANCE}
+                  topologyKey: kubernetes.io/hostname
+          containers:
+            - env:
+                - name: LS_JAVA_OPTS
+                  value: -Xmx1g -Xms1g
+                - name: ELASTICSEARCH_USERNAME
+                  valueFrom:
+                    secretKeyRef:
+                      key: username
+                      name: ${APP_NAME}-${INSTANCE}-credentials
+                - name: ELASTICSEARCH_PASSWORD
+                  valueFrom:
+                    secretKeyRef:
+                      key: password
+                      name: ${APP_NAME}-${INSTANCE}-credentials
+              image: docker-registry.default.svc:5000/${NAMESPACE}/${APP_NAME}-custom:latest
+              imagePullPolicy: IfNotPresent
+              livenessProbe:
+                failureThreshold: 3
+                exec:
+                  command:
+                    - sh
+                    - -c
+                    - |
+                      #!/usr/bin/env bash -e
+                      http () {
+                          local path="${1}"
+                          set -- -XGET -s --fail
+
+                          if [ -n "${ELASTICSEARCH_USERNAME}" ] && [ -n "${ELASTICSEARCH_PASSWORD}" ]; then
+                            set -- "$@" -u "${ELASTICSEARCH_USERNAME}:${ELASTICSEARCH_PASSWORD}"
+                          fi
+
+                          STATUS=$(curl --output /dev/null --write-out "%{http_code}" -k "$@" "http://localhost:9600${path}")
+                          if [[ "${STATUS}" -eq 200 ]]; then
+                            exit 0
+                          fi
+
+                          echo "Error: Got HTTP code ${STATUS} but expected a 200"
+                          exit 1
+                      }
+
+                      http "/"
+                initialDelaySeconds: 300
+                periodSeconds: 10
+                successThreshold: 1
+                timeoutSeconds: 5
+              name: ${APP_NAME}
+              ports:
+                - containerPort: 9600
+                  name: http
+                - containerPort: 5044
+                  name: beats-lugin
+                - containerPort: 8080
+                  name: http-plugin
+                - containerPort: 11024
+                  name: tcp-plugin
+              readinessProbe:
+                failureThreshold: 3
+                exec:
+                  command:
+                    - sh
+                    - -c
+                    - |
+                      #!/usr/bin/env bash -e
+                      http () {
+                          local path="${1}"
+                          set -- -XGET -s --fail
+
+                          if [ -n "${ELASTICSEARCH_USERNAME}" ] && [ -n "${ELASTICSEARCH_PASSWORD}" ]; then
+                            set -- "$@" -u "${ELASTICSEARCH_USERNAME}:${ELASTICSEARCH_PASSWORD}"
+                          fi
+
+                          STATUS=$(curl --output /dev/null --write-out "%{http_code}" -k "$@" "http://localhost:9600${path}")
+                          if [[ "${STATUS}" -eq 200 ]]; then
+                            exit 0
+                          fi
+
+                          echo "Error: Got HTTP code ${STATUS} but expected a 200"
+                          exit 1
+                      }
+
+                      http "/"
+                initialDelaySeconds: 120
+                periodSeconds: 10
+                successThreshold: 3
+                timeoutSeconds: 10
+              resources:
+                limits:
+                  cpu: "${CPU_LIMIT}"
+                  memory: "${MEMORY_LIMIT}"
+                requests:
+                  cpu: "${CPU_REQUEST}"
+                  memory: "${MEMORY_REQUEST}"
+              volumeMounts:
+                - mountPath: /usr/share/logstash/config/certs
+                  name: elastic-ca-pem
+                - mountPath: /usr/share/logstash/config/logstash.yml
+                  name: logstashconfig
+                  subPath: logstash.yml
+                - mountPath: /usr/share/logstash/pipeline/filter-json.conf
+                  name: logstashpipeline
+                  subPath: filter-json.conf
+                - mountPath: /usr/share/logstash/pipeline/in-beats.conf
+                  name: logstashpipeline
+                  subPath: in-beats.conf
+                - mountPath: /usr/share/logstash/pipeline/in-http.conf
+                  name: logstashpipeline
+                  subPath: in-http.conf
+                - mountPath: /usr/share/logstash/pipeline/in-tcp.conf
+                  name: logstashpipeline
+                  subPath: in-tcp.conf
+                - mountPath: /usr/share/logstash/pipeline/in-uptime.conf
+                  name: logstashpipeline
+                  subPath: in-uptime.conf
+                - mountPath: /usr/share/logstash/pipeline/out-elasticsearch.conf
+                  name: logstashpipeline
+                  subPath: out-elasticsearch.conf
+                - mountPath: /usr/share/logstash/pipeline/out-std.conf
+                  name: logstashpipeline
+                  subPath: out-std.conf
+          terminationGracePeriodSeconds: 120
+          volumes:
+            - name: elastic-ca-pem
+              secret:
+                secretName: ${APP_NAME}-${INSTANCE}-ca-pem
+            - configMap:
+                name: ${APP_NAME}-${INSTANCE}-config
+              name: logstashconfig
+            - configMap:
+                name: ${APP_NAME}-${INSTANCE}-pipeline
+              name: logstashpipeline
+      updateStrategy:
+        type: RollingUpdate
+parameters:
+  - name: APP_NAME
+    description: Application name
+    displayName: Application name
+    required: true
+    value: logstash
+  - name: ELASTIC_VERSION
+    description: Application version of Elastic Stack in string format
+    displayName: Application version
+    required: false
+    value: "7.5.1"
+  - name: LABEL_ENV
+    description: Deployment environment
+    displayName: Environment
+    required: true
+    value: dev
+  - name: INSTANCE
+    description: The deployment instance name
+    displayName: Deployment Instance
+    required: true
+    value: master
+  - name: NAMESPACE
+    description: Target namespace reference (i.e. 'ixhmbm-dev')
+    displayName: Target Namespace
+    required: true
+    value: ixhmbm-dev
+  - name: CPU_LIMIT
+    description: Limit Peak CPU per pod (in millicores ex. 1000m)
+    displayName: CPU Limit
+    value: 1000m
+  - name: CPU_REQUEST
+    description: Requested CPU per pod (in millicores ex. 500m)
+    displayName: CPU Request
+    value: 100m
+  - name: MEMORY_LIMIT
+    description: Limit Peak Memory per pod (in gigabytes Gi or megabytes Mi ex. 2Gi)
+    displayName: Memory Limit
+    value: 1536Mi
+  - name: MEMORY_REQUEST
+    description: Requested Memory per pod (in gigabytes Gi or megabytes Mi ex. 500Mi)
+    displayName: Memory Request
+    value: 1Gi

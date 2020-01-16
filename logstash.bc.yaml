@@ -1,0 +1,82 @@
+---
+apiVersion: v1
+kind: Template
+labels:
+  build: ${APP_NAME}-custom
+  template: ${APP_NAME}-custom-build-template
+metadata:
+  name: ${APP_NAME}-custom-build-template
+objects:
+  - apiVersion: v1
+    kind: ImageStream
+    metadata:
+      name: ${APP_NAME}-custom
+    spec:
+      lookupPolicy:
+        local: false
+  - apiVersion: v1
+    kind: BuildConfig
+    metadata:
+      name: ${APP_NAME}-custom
+    spec:
+      completionDeadlineSeconds: 600
+      failedBuildsHistoryLimit: 3
+      nodeSelector:
+      output:
+        to:
+          kind: ImageStreamTag
+          name: "${APP_NAME}-custom:${INSTANCE}"
+      postCommit: {}
+      resources:
+        limits:
+          cpu: "${CPU_LIMIT}"
+          memory: "${MEMORY_LIMIT}"
+        requests:
+          cpu: "${CPU_REQUEST}"
+          memory: "${MEMORY_REQUEST}"
+      runPolicy: SerialLatestOnly
+      source:
+        dockerfile: |-
+          FROM BuildConfig
+          RUN rm -f /usr/share/logstash/pipeline/logstash.conf \
+           && bin/logstash-plugin install logstash-input-tcp \
+           && bin/logstash-plugin install logstash-input-http
+      strategy:
+        dockerStrategy:
+          from:
+            kind: DockerImage
+            name: "elastic/logstash:${ELASTIC_VERSION}"
+        type: Docker
+      successfulBuildsHistoryLimit: 3
+parameters:
+  - name: APP_NAME
+    description: Application name
+    displayName: Application name
+    required: true
+    value: logstash
+  - name: ELASTIC_VERSION
+    description: Application version of Elastic Stack in string format
+    displayName: Application version
+    required: true
+    value: "7.5.1"
+  - name: INSTANCE
+    description: The deployment instance name
+    displayName: Deployment Instance
+    required: true
+    value: master
+  - name: CPU_LIMIT
+    description: Limit Peak CPU per pod (in millicores ex. 1000m)
+    displayName: CPU Limit
+    value: 1000m
+  - name: CPU_REQUEST
+    description: Requested CPU per pod (in millicores ex. 500m)
+    displayName: CPU Request
+    value: 2000m
+  - name: MEMORY_LIMIT
+    description: Limit Peak Memory per pod (in gigabytes Gi or megabytes Mi ex. 2Gi)
+    displayName: Memory Limit
+    value: 2Gi
+  - name: MEMORY_REQUEST
+    description: Requested Memory per pod (in gigabytes Gi or megabytes Mi ex. 500Mi)
+    displayName: Memory Request
+    value: 1Gi
