@@ -14,6 +14,7 @@ objects:
     spec:
       lookupPolicy:
         local: false
+
   - apiVersion: v1
     kind: BuildConfig
     metadata:
@@ -67,11 +68,11 @@ parameters:
   - name: CPU_LIMIT
     description: Limit Peak CPU per pod (in millicores ex. 1000m)
     displayName: CPU Limit
-    value: 1000m
+    value: 2000m
   - name: CPU_REQUEST
     description: Requested CPU per pod (in millicores ex. 500m)
     displayName: CPU Request
-    value: 2000m
+    value: 1000m
   - name: MEMORY_LIMIT
     description: Limit Peak Memory per pod (in gigabytes Gi or megabytes Mi ex. 2Gi)
     displayName: Memory Limit

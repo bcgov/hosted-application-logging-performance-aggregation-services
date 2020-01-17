@@ -132,25 +132,37 @@ objects:
         env: ${LABEL_ENV}
         role: ${APP_NAME}
 
-  - apiVersion: v1
-    kind: DeploymentConfig
+  - apiVersion: apps/v1
+    kind: StatefulSet
     metadata:
       name: ${APP_NAME}-${INSTANCE}
     spec:
-      replicas: 2
+      podManagementPolicy: Parallel
+      replicas: 1
       selector:
-        app: ${APP_NAME}-${INSTANCE}
-        env: ${LABEL_ENV}
-        role: ${APP_NAME}
-      strategy:
-        type: Recreate
+        matchLabels:
+          app: ${APP_NAME}-${INSTANCE}
+          env: ${LABEL_ENV}
+          role: ${APP_NAME}
+      serviceName: ${APP_NAME}-${INSTANCE}
       template:
         metadata:
           labels:
             app: ${APP_NAME}-${INSTANCE}
             env: ${LABEL_ENV}
             role: ${APP_NAME}
+          name: ${APP_NAME}-${INSTANCE}
         spec:
+          affinity:
+            podAntiAffinity:
+              requiredDuringSchedulingIgnoredDuringExecution:
+                - labelSelector:
+                    matchExpressions:
+                      - key: app
+                        operator: In
+                        values:
+                          - ${APP_NAME}-${INSTANCE}
+                  topologyKey: kubernetes.io/hostname
           containers:
             - env:
                 - name: LS_JAVA_OPTS
@@ -284,6 +296,8 @@ objects:
             - configMap:
                 name: ${APP_NAME}-${INSTANCE}-pipeline
               name: logstashpipeline
+      updateStrategy:
+        type: RollingUpdate
 parameters:
   - name: APP_NAME
     description: Application name

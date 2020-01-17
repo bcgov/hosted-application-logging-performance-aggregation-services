@@ -18,7 +18,7 @@ Create certs for desired elasticsearch host (`${APP_NAME}-${INSTANCE}`).
 
 ``` bash
 export APP_NAME=elasticsearch
-export INSTANCE=jujaga
+export INSTANCE=master
 
 export ELASTIC_NAME=elasticsearch
 export KIBANA_NAME=kibana
