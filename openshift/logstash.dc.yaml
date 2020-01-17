@@ -22,7 +22,7 @@ objects:
         xpack.monitoring.elasticsearch.sniffing: false
         xpack.monitoring.elasticsearch.ssl.verification_mode: certificate
         xpack.monitoring.elasticsearch.ssl.certificate_authority: /usr/share/logstash/config/certs/elastic-ca.pem
-  
+
   - apiVersion: v1
     kind: ConfigMap
     metadata:
@@ -85,7 +85,7 @@ objects:
       out-std.conf: |
         output {
           stdout { }
-        } 
+        }
 
   - apiVersion: v1
     kind: Service
@@ -171,12 +171,12 @@ objects:
                   valueFrom:
                     secretKeyRef:
                       key: username
-                      name: ${APP_NAME}-${INSTANCE}-credentials
+                      name: ${ELASTIC_NAME}-${INSTANCE}-credentials
                 - name: ELASTICSEARCH_PASSWORD
                   valueFrom:
                     secretKeyRef:
                       key: password
-                      name: ${APP_NAME}-${INSTANCE}-credentials
+                      name: ${ELASTIC_NAME}-${INSTANCE}-credentials
               image: docker-registry.default.svc:5000/${NAMESPACE}/${APP_NAME}-custom:latest
               imagePullPolicy: IfNotPresent
               livenessProbe:
@@ -287,7 +287,7 @@ objects:
           volumes:
             - name: elastic-ca-pem
               secret:
-                secretName: ${APP_NAME}-${INSTANCE}-ca-pem
+                secretName: ${ELASTIC_NAME}-${INSTANCE}-ca-pem
             - configMap:
                 name: ${APP_NAME}-${INSTANCE}-config
               name: logstashconfig
@@ -302,6 +302,11 @@ parameters:
     displayName: Application name
     required: true
     value: logstash
+  - name: ELASTIC_NAME
+    description: Elastic application name
+    displayName: Elastic name
+    required: true
+    value: elasticsearch
   - name: ELASTIC_VERSION
     description: Application version of Elastic Stack in string format
     displayName: Application version
@@ -333,7 +338,7 @@ parameters:
   - name: MEMORY_LIMIT
     description: Limit Peak Memory per pod (in gigabytes Gi or megabytes Mi ex. 2Gi)
     displayName: Memory Limit
-    value: 1536Mi
+    value: 1.5Gi
   - name: MEMORY_REQUEST
     description: Requested Memory per pod (in gigabytes Gi or megabytes Mi ex. 500Mi)
     displayName: Memory Request
