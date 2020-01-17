@@ -33,7 +33,7 @@ objects:
     metadata:
       name: ${APP_NAME}-${INSTANCE}
     spec:
-      host: ${APP_NAME}-${INSTANCE}.${NAMESPACE}.pathfinder.gov.bc.ca
+      host: ${APP_NAME}-${INSTANCE}-${NAMESPACE}.pathfinder.gov.bc.ca
       port:
         targetPort: http
       tls:
