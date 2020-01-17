@@ -21,7 +21,7 @@ objects:
         xpack.monitoring.elasticsearch.password: "${ELASTICSEARCH_PASSWORD}"
         xpack.monitoring.elasticsearch.sniffing: false
         xpack.monitoring.elasticsearch.ssl.verification_mode: certificate
-        xpack.monitoring.elasticsearch.ssl.certificate_authority: /usr/share/logstash/config/certs/elastic-ca.pem
+        xpack.monitoring.elasticsearch.ssl.certificate_authority: /usr/share/logstash/config/certs/elasticsearch-ca.pem
 
   - apiVersion: v1
     kind: ConfigMap
@@ -77,7 +77,7 @@ objects:
             password => "${ELASTICSEARCH_PASSWORD}"
             ssl => true
             ssl_certificate_verification => true
-            cacert => "/usr/share/logstash/config/certs/elastic-ca.pem"
+            cacert => "/usr/share/logstash/config/certs/elasticsearch-ca.pem"
             action => "index"
             index => "logstash-%{+YYYY.MM.dd}"
           }
