@@ -82,7 +82,7 @@ objects:
           containers:
             - env:
                 - name: ELASTICSEARCH_HOSTS
-                  value: ${ELASTICSEARCH_HOST}
+                  value: https://${ELASTIC_NAME}-${INSTANCE}:9200
                 - name: SERVER_HOST
                   value: 0.0.0.0
                 - name: ELASTICSEARCH_USERNAME
@@ -186,11 +186,6 @@ parameters:
     displayName: Target Namespace
     required: true
     value: ixhmbm-dev
-  - name: ELASTICSEARCH_HOST
-    description: The Elasticsearch endpoint. This url needs to be defined with a port and protocol.
-    displayName: Elasticsearch Host Endpoint
-    required: true
-    value: https://elasticsearch-master:9200
   - name: CPU_LIMIT
     description: Limit Peak CPU per pod (in millicores ex. 1000m)
     displayName: CPU Limit

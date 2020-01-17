@@ -16,7 +16,7 @@ objects:
     data:
       logstash.yml: |
         xpack.monitoring.enabled: true
-        xpack.monitoring.elasticsearch.hosts: ["https://elasticsearch-master:9200"]
+        xpack.monitoring.elasticsearch.hosts: ["${ELASTICSEARCH_HOSTS}"]
         xpack.monitoring.elasticsearch.username: "${ELASTICSEARCH_USERNAME}"
         xpack.monitoring.elasticsearch.password: "${ELASTICSEARCH_PASSWORD}"
         xpack.monitoring.elasticsearch.sniffing: false
@@ -72,7 +72,7 @@ objects:
       out-elasticsearch.conf: |
         output {
           elasticsearch {
-            hosts => ["elasticsearch-master"]
+            hosts => ["${ELASTICSEARCH_HOSTS}"]
             user => "${ELASTICSEARCH_USERNAME}"
             password => "${ELASTICSEARCH_PASSWORD}"
             ssl => true
@@ -167,6 +167,8 @@ objects:
             - env:
                 - name: LS_JAVA_OPTS
                   value: -Xmx1g -Xms1g
+                - name: ELASTICSEARCH_HOSTS
+                  value: https://${ELASTIC_NAME}-${INSTANCE}:9200
                 - name: ELASTICSEARCH_USERNAME
                   valueFrom:
                     secretKeyRef:
