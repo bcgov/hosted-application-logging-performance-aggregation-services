@@ -30,6 +30,27 @@ objects:
     data:
       filter-json.conf: |
         filter {
+          grok {
+            match => { "message" => "%{IP:[clogs][accessLog][client]} \- %{USER:[clogs][accessLog][remoteUser]} \[%{GREEDYDATA:[clogs][accessLog][rawTimestamp]}\] \"%{WORD:[clogs][accessLog][method]} %{PATH:[clogs][accessLog][path]} HTTP\/%{DATA:[clogs][accessLog][httpVersion]}\" %{NUMBER:[clogs][accessLog][httpStatus]} %{NUMBER:[clogs][accessLog][contentLength]} \"%{DATA:[clogs][accessLog][referrer]}\" \"%{GREEDYDATA:[clogs][accessLog][userAgent]}\"" }
+            tag_on_failure => []
+          }
+        }
+        filter {
+          date {
+            match => [ "[clogs][accessLog][rawTimestamp]", "d/MMM/yyyy:HH:mm:ss Z" ]
+            target => "[clogs][accessLog][timestamp]"
+          }
+        }
+        filter {
+          if [clogs][accessLog][client] {
+            geoip {
+              source => "[clogs][accessLog][client]"
+              target => "[clogs][accessLog][geoip]"
+              tag_on_failure => []
+            }
+          }
+        }
+        filter {
           json {
             source => "message"
             skip_on_invalid_json => true
@@ -143,7 +164,7 @@ objects:
         env: ${LABEL_ENV}
         role: ${APP_NAME}
       strategy:
-        type: Recreate
+        type: Rolling
       template:
         metadata:
           labels:

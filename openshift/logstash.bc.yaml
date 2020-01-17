@@ -41,7 +41,12 @@ objects:
           FROM BuildConfig
           RUN rm -f /usr/share/logstash/pipeline/logstash.conf \
            && bin/logstash-plugin install logstash-input-tcp \
-           && bin/logstash-plugin install logstash-input-http
+           && bin/logstash-plugin install logstash-input-http \
+           && bin/logstash-plugin install logstash-filter-date \
+           && bin/logstash-plugin install logstash-filter-geoip \
+           && bin/logstash-plugin install logstash-filter-grok \
+           && bin/logstash-plugin install logstash-filter-json_encode \
+           && bin/logstash-plugin install logstash-filter-mutate
       strategy:
         dockerStrategy:
           from:
