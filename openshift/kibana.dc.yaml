@@ -65,7 +65,7 @@ objects:
     metadata:
       name: ${APP_NAME}-${INSTANCE}
     spec:
-      replicas: 1
+      replicas: 2
       selector:
         app: ${APP_NAME}-${INSTANCE}
         env: ${LABEL_ENV}

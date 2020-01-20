@@ -109,6 +109,24 @@ objects:
         }
 
   - apiVersion: v1
+    kind: Route
+    metadata:
+      name: ${APP_NAME}-${INSTANCE}
+    spec:
+      host: ${APP_NAME}-${INSTANCE}-${NAMESPACE}.pathfinder.gov.bc.ca
+      path: /http
+      port:
+        targetPort: http-plugin
+      tls:
+        insecureEdgeTerminationPolicy: Redirect
+        termination: edge
+      to:
+        kind: Service
+        name: ${APP_NAME}-${INSTANCE}-beats-http-plugin
+        weight: 100
+      wildcardPolicy: None
+
+  - apiVersion: v1
     kind: Service
     metadata:
       name: ${APP_NAME}-${INSTANCE}-beats
