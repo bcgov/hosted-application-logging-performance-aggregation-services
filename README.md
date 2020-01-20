@@ -12,7 +12,7 @@ This repository contains Openshift Proof of Concept for the Elastic Stack (Elast
 
 ## Documentation
 
-* [Certificate Setup](openshift/certificate-setup.md)
+* [Openshift Setup](openshift/README.md)
 
 ## Getting Help or Reporting an Issue
 
