@@ -38,7 +38,6 @@ oc create secret generic $APP_NAME-$INSTANCE-certificates --from-file=$APP_NAME-
 oc create secret generic $APP_NAME-$INSTANCE-certificate-pem --from-file=$APP_NAME-certificate.pem
 oc create secret generic $APP_NAME-$INSTANCE-ca-pem --from-file=$APP_NAME-ca.pem
 
-
 oc process -f elasticstack.secret.yaml -p ELASTIC_NAME=$ELASTIC_NAME -p KIBANA_NAME=$KIBANA_NAME -p INSTANCE=$INSTANCE | oc create -f -
 ```
 

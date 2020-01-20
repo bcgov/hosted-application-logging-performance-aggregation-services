@@ -71,7 +71,7 @@ objects:
         env: ${LABEL_ENV}
         role: ${APP_NAME}
       strategy:
-        type: Recreate
+        type: Rolling
       template:
         metadata:
           labels:
@@ -201,4 +201,4 @@ parameters:
   - name: MEMORY_REQUEST
     description: Requested Memory per pod (in gigabytes Gi or megabytes Mi ex. 500Mi)
     displayName: Memory Request
-    value: 640Mi
+    value: 384Mi
