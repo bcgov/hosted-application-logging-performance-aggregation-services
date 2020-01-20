@@ -26,22 +26,24 @@ Ensure your OpenShift CLI tool is logged in. Make sure you change your namespace
 
 ``` bash
 export ELK_VERSION=7.5.1
+export NAMESPACE=ixhmbm-dev
 
-oc run cert --image=elastic/elasticsearch:$ELK_VERSION --command -it --rm --restart=Never -- bash
+oc run -n $NAMESPACE cert --image=elastic/elasticsearch:$ELK_VERSION --command -it --rm --restart=Never -- bash
 ```
 
 ##### Generate Certificates
 
-Open a new terminal and ensure your OpenShift CLI tool is logged in. Make sure you change your namespace to the correct project with `oc project <projectname>`. You will create certs for desired elasticsearch host (`${APP_NAME}-${INSTANCE}`).
+Open a new terminal and ensure your OpenShift CLI tool is logged in. Make sure you change your namespace to the correct project with `oc project <projectname>`. You will create certs for desired elasticsearch host `${APP_NAME}-${INSTANCE}`.
 
 ``` bash
 export APP_NAME=elasticsearch
 export INSTANCE=master
+export NAMESPACE=ixhmbm-dev
 
-oc rsh cert elasticsearch-certutil ca --out /tmp/$APP_NAME-ca.p12 --pass ''
-oc rsh cert elasticsearch-certutil cert --name $APP_NAME --dns $APP_NAME-$INSTANCE --ca /tmp/$APP_NAME-ca.p12 --pass '' --ca-pass '' --out /tmp/$APP_NAME-certificates.p12
-oc cp cert:/tmp/$APP_NAME-ca.p12 ./
-oc cp cert:/tmp/$APP_NAME-certificates.p12 ./
+oc rsh -n $NAMESPACE cert elasticsearch-certutil ca --out /tmp/$APP_NAME-ca.p12 --pass ''
+oc rsh -n $NAMESPACE cert elasticsearch-certutil cert --name $APP_NAME --dns $APP_NAME-$INSTANCE --ca /tmp/$APP_NAME-ca.p12 --pass '' --ca-pass '' --out /tmp/$APP_NAME-certificates.p12
+oc cp -n $NAMESPACE cert:/tmp/$APP_NAME-ca.p12 ./
+oc cp -n $NAMESPACE cert:/tmp/$APP_NAME-certificates.p12 ./
 openssl pkcs12 -nodes -passin pass:'' -in $APP_NAME-certificates.p12 -out $APP_NAME-certificate.pem
 openssl pkcs12 -clcerts -nokeys -passin pass:'' -in $APP_NAME-ca.p12 -out $APP_NAME-ca.pem
 ```
@@ -51,11 +53,11 @@ openssl pkcs12 -clcerts -nokeys -passin pass:'' -in $APP_NAME-ca.p12 -out $APP_N
 Once the four certificate files are created, we can add them to OpenShift secrets.
 
 ``` bash
-oc create secret generic $APP_NAME-$INSTANCE-certificates --from-file=$APP_NAME-certificates.p12
-oc create secret generic $APP_NAME-$INSTANCE-certificate-pem --from-file=$APP_NAME-certificate.pem
-oc create secret generic $APP_NAME-$INSTANCE-ca-pem --from-file=$APP_NAME-ca.pem
+oc create -n $NAMESPACE secret generic $APP_NAME-$INSTANCE-certificates --from-file=$APP_NAME-certificates.p12
+oc create -n $NAMESPACE secret generic $APP_NAME-$INSTANCE-certificate-pem --from-file=$APP_NAME-certificate.pem
+oc create -n $NAMESPACE secret generic $APP_NAME-$INSTANCE-ca-pem --from-file=$APP_NAME-ca.pem
 
-oc process -f elasticstack.secret.yaml -p INSTANCE=$INSTANCE | oc create -f -
+oc process -n $NAMESPACE -f elasticstack.secret.yaml -p INSTANCE=$INSTANCE | oc create -f -
 ```
 
 ##### Stop & Remove Temporary Elasticsearch Pod
@@ -63,5 +65,109 @@ oc process -f elasticstack.secret.yaml -p INSTANCE=$INSTANCE | oc create -f -
 Once the secrets are up, you need to dispose of your cert pod. This can be done by exiting out of the remote terminal shell, or by force deleting the specific cert pod.
 
 ``` bash
-oc delete pod/cert --force
+oc delete -n $NAMESPACE pod/cert --force
 ```
+
+## Build Config & Deployment
+
+The Elastic stack is made up of ElasticSearch, Kibana and Logstash. We are currently leveraging basic Openshift Routes to expose and foward incoming traffic to the right services. Most of the images we are using are the official published images from [Elastic.co](https://www.elastic.co). However, as we apply certain plugin plugins to support specific functionality, some components will have custom build configurations which extend on top of those images.
+
+## Templates
+
+We leverage Openshift Templates in order to ensure all environment variables, settings and contexts are pushed to Openshift correctly. Files ending with `.bc.yaml` specify the build configurations, while files ending with `.dc.yaml` specify the components required for deployment.
+
+### Build Configurations
+
+Build configurations will emit and handle the chained builds or standard builds as necessary. Note that most parameters will have reasonable defaults specified if you do not explicitly configure them. Refer to the template parameter definitions for more details. They take in the following parameters:
+
+| Name | Required | Description |
+| --- | --- | --- |
+| APP_NAME | yes | Application name |
+| ELASTIC_VERSION | yes | Application version of Elastic Stack in string format |
+| INSTANCE | yes | The deployment instance name |
+| CPU_LIMIT | yes | Limit Peak CPU per pod (in millicores ex. 1000m) |
+| CPU_REQUEST | yes | Requested CPU per pod (in millicores ex. 500m) |
+| MEMORY_LIMIT | yes | Limit Peak Memory per pod (in gigabytes Gi or megabytes Mi ex. 2Gi) |
+| MEMORY_REQUEST | yes | Requested Memory per pod (in gigabytes Gi or megabytes Mi ex. 500Mi) |
+
+The template can be manually invoked and deployed via Openshift CLI. For example:
+
+``` bash
+export INSTANCE=master
+export NAMESPACE=ixhmbm-dev
+
+oc process -n $NAMESPACE -f logstash.bc.yaml -p INSTANCE=$INSTANCE -o yaml | oc -n $NAMESPACE create -f -
+```
+
+Note that these build configurations do not have any triggers defined. They will be invoked by the Jenkins pipeline, started manually in the console, or by an equivalent oc command for example:
+
+``` bash
+oc start-build -n $NAMESPACE <buildname> --follow
+```
+
+The build config should write the resultant image to `<buildname>:$INSTANCE`, where the image name is buildname, and the tag is the specified INSTANCE. Depending on your build tooling, you may need to do the equivalent oc command for tag management:
+
+``` bash
+oc tag -n $NAMESPACE <buildname>:latest <buildname>:$INSTANCE
+```
+
+*Note: Remember to swap out the bracketed values with the appropriate values!*
+
+### Deployment Configurations
+
+Deployment configurations will emit and handle the deployment lifecycles of running containers based off of the previously built images. They generally contain a deploymentconfig, a service, and a route, but may also contain configmaps and statefulsets depending on the application. Most templates will take in the following parameters (consult the templates directly for exact details):
+
+| Name | Required | Description |
+| --- | --- | --- |
+| APP_NAME | yes | Application name |
+| ELASTIC_VERSION | yes | Application version of Elastic Stack in string format |
+| INSTANCE | yes | The deployment instance name |
+| LABEL_ENV | yes | Deployment environment |
+| NAMESPACE | yes | Target namespace reference (i.e. 'ixhmbm-dev') |
+| CPU_LIMIT | yes | Limit Peak CPU per pod (in millicores ex. 1000m) |
+| CPU_REQUEST | yes | Requested CPU per pod (in millicores ex. 500m) |
+| MEMORY_LIMIT | yes | Limit Peak Memory per pod (in gigabytes Gi or megabytes Mi ex. 2Gi) |
+| MEMORY_REQUEST | yes | Requested Memory per pod (in gigabytes Gi or megabytes Mi ex. 500Mi) |
+| PVC_SIZE | yes | The size of the persistent volume to create |
+| STORAGE_CLASS | yes | The type of the persistent volume to create |
+
+A Jenkins pipeline will be handle deployment invocation automatically. However should you need to run it manually, you can do so with the following for example:
+
+``` bash
+export INSTANCE=master
+export NAMESPACE=ixhmbm-dev
+
+oc process -n $NAMESPACE -f elasticsearch.dc.yaml -p INSTANCE=$INSTANCE -o yaml | oc -n $NAMESPACE apply -f -
+
+oc process -n $NAMESPACE -f kibana.dc.yaml -p INSTANCE=$INSTANCE -p NAMESPACE=$NAMESPACE -o yaml | oc -n $NAMESPACE apply -f -
+
+oc process -n $NAMESPACE -f logstash.dc.yaml -p INSTANCE=$INSTANCE -p NAMESPACE=$NAMESPACE -o yaml | oc -n $NAMESPACE apply -f -
+```
+
+Due to the triggers that are set in the deploymentconfig, the deployment will begin automatically. However, you can deploy manually by use the following command for example:
+
+``` bash
+oc rollout -n $NAMESPACE latest dc/<buildname>-$INSTANCE
+```
+
+*Note: Remember to swap out the bracketed values with the appropriate values!*
+
+## Instance Cleanup
+
+In order to clear all resources for a specific instance, run the following two commands to delete all relevant resources from the Openshift project (replacing `INSTANCE` with the appropriate value):
+
+``` bash
+export NAMESPACE=ixhmbm-dev
+
+oc delete all,cm -n $NAMESPACE --selector app=elasticsearch-<INSTANCE>
+oc delete all,cm -n $NAMESPACE --selector app=kibana-<INSTANCE>
+oc delete all,cm -n $NAMESPACE --selector app=logstash-<INSTANCE>
+```
+
+If necessary, you can remove old secrets through the Openshift Web Console or its equivalent OC CLI command.
+
+``` bash
+oc delete -n $NAMESPACE secret <secretname>
+```
+
+*Note: Remember to swap out the bracketed values with the appropriate values!*
