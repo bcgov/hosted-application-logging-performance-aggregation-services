@@ -2,15 +2,16 @@
 apiVersion: v1
 kind: Template
 labels:
-  build: ${APP_NAME}-custom
-  template: ${APP_NAME}-custom-build-template
+  app: ${APP_NAME}-${INSTANCE}
+  build: ${APP_NAME}-${INSTANCE}-custom
+  template: ${APP_NAME}-${INSTANCE}-template-bc
 metadata:
-  name: ${APP_NAME}-custom-build-template
+  name: ${APP_NAME}-${INSTANCE}-template-bc
 objects:
   - apiVersion: v1
     kind: ImageStream
     metadata:
-      name: ${APP_NAME}-custom
+      name: ${APP_NAME}-${INSTANCE}-custom
     spec:
       lookupPolicy:
         local: false
@@ -18,7 +19,7 @@ objects:
   - apiVersion: v1
     kind: BuildConfig
     metadata:
-      name: ${APP_NAME}-custom
+      name: ${APP_NAME}-${INSTANCE}-custom
     spec:
       completionDeadlineSeconds: 600
       failedBuildsHistoryLimit: 3
@@ -26,7 +27,7 @@ objects:
       output:
         to:
           kind: ImageStreamTag
-          name: "${APP_NAME}-custom:${INSTANCE}"
+          name: "${APP_NAME}-${INSTANCE}-custom:${INSTANCE}"
       postCommit: {}
       resources:
         limits:
@@ -46,7 +47,10 @@ objects:
            && bin/logstash-plugin install logstash-filter-geoip \
            && bin/logstash-plugin install logstash-filter-grok \
            && bin/logstash-plugin install logstash-filter-json_encode \
-           && bin/logstash-plugin install logstash-filter-mutate
+           && bin/logstash-plugin install logstash-filter-mutate \
+           && bin/logstash-plugin install logstash-filter-dissect \
+           && bin/logstash-plugin install logstash-filter-elapsed \
+           && bin/logstash-plugin install logstash-filter-metrics
       strategy:
         dockerStrategy:
           from:
