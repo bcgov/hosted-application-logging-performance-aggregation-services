@@ -31,23 +31,49 @@ objects:
       filter-json.conf: |
         filter {
           grok {
-            match => { "message" => "%{IP:[clogs][accessLog][client]} \- %{USER:[clogs][accessLog][remoteUser]} \[%{GREEDYDATA:[clogs][accessLog][rawTimestamp]}\] \"%{WORD:[clogs][accessLog][method]} %{PATH:[clogs][accessLog][path]} HTTP\/%{DATA:[clogs][accessLog][httpVersion]}\" %{NUMBER:[clogs][accessLog][httpStatus]} %{NUMBER:[clogs][accessLog][contentLength]} \"%{DATA:[clogs][accessLog][referrer]}\" \"%{GREEDYDATA:[clogs][accessLog][userAgent]}\"" }
+            match => { "message" => "%{IP:[clogs][accessLog][client]} \- %{USER:[clogs][accessLog][remoteUser]} \[%{HTTPDATE:[clogs][accessLog][rawTimestamp]}\] \"%{WORD:[clogs][accessLog][method]} %{PATH:[clogs][accessLog][path]} HTTP\/%{DATA:[clogs][accessLog][httpVersion]}\" %{NUMBER:[clogs][accessLog][httpStatus]} %{NUMBER:[clogs][accessLog][contentLength]} \"%{DATA:[clogs][accessLog][referrer]}\" \"%{DATA:[clogs][accessLog][userAgent]}\"" }
             tag_on_failure => []
           }
-        }
-        filter {
           date {
             match => [ "[clogs][accessLog][rawTimestamp]", "d/MMM/yyyy:HH:mm:ss Z" ]
             target => "[clogs][accessLog][timestamp]"
           }
-        }
-        filter {
           if [clogs][accessLog][client] {
             geoip {
               source => "[clogs][accessLog][client]"
               target => "[clogs][accessLog][geoip]"
               tag_on_failure => []
             }
+          }
+        }
+        filter {
+          grok {
+            match => { "message" => "%{DATA:[clogs][type]} %{DATA:[clogs][data][op]} %{DATA:[clogs][data][azp]} %{NUMBER:[clogs][ts]} %{NUMBER:[clogs][data][context][keyCount]} %{DATA:[clogs][data][content][fileType]} %{DATA:[clogs][data][content][encodingType]} %{NUMBER:[clogs][data][content][size]} %{DATA:[clogs][data][output][fileType]} %{NUMBER:[clogs][data][output][size]} %{NUMBER:[clogs][data][response][status]} %{NUMBER:[clogs][data][response][timeMs]}" }
+            tag_on_failure => []
+          }
+          mutate { convert => { "[clogs][ts]" => "integer" } }
+          mutate { convert => { "[clogs][data][context][keyCount]" => "integer" } }
+          mutate { convert => { "[clogs][data][content][size]" => "float" } }
+          mutate { convert => { "[clogs][data][output][size]" => "float" } }
+          mutate { convert => { "[clogs][data][response][status]" => "integer" } }
+          mutate { convert => { "[clogs][data][response][timeMs]" => "float" } }
+          date {
+            timezone => "UTC"
+            match => ["[clogs][ts]", "UNIX_MS"]
+            target => "[clogs][timestamp]"
+          }
+          mutate { add_field => { "[clogs][level]" => "info" } }
+          mutate { add_field => { "[@metadata][loglevel]" => "info" } }
+          mutate { add_field => { "[@metadata][index]" => "cdogs" } }
+        }
+        filter {
+          if ![@metadata][index] {
+            mutate { add_field => { "[@metadata][index]" => "logstash" } }
+          }
+        }
+        filter {
+          if ![@metadata][loglevel] {
+            mutate { add_field => { "[@metadata][loglevel]" => "info" } }
           }
         }
         filter {
@@ -99,15 +125,13 @@ objects:
             ssl => true
             ssl_certificate_verification => true
             cacert => "/usr/share/logstash/config/certs/elasticsearch-ca.pem"
-            action => "index"
-            index => "logstash-%{+YYYY.MM.dd}"
+            index => "%{[@metadata][index]}-%{[@metadata][loglevel]}-%{+YYYY.MM.dd}"
           }
         }
       out-std.conf: |
         output {
           stdout { }
         }
-
   - apiVersion: v1
     kind: Route
     metadata:
@@ -206,7 +230,7 @@ objects:
                     secretKeyRef:
                       key: password
                       name: ${ELASTIC_NAME}-${INSTANCE}-credentials
-              image: docker-registry.default.svc:5000/${NAMESPACE}/${APP_NAME}-custom:${INSTANCE}
+              image: docker-registry.default.svc:5000/${NAMESPACE}/${APP_NAME}-${INSTANCE}-custom:${INSTANCE}
               imagePullPolicy: IfNotPresent
               livenessProbe:
                 failureThreshold: 3

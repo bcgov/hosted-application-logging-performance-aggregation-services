@@ -96,7 +96,7 @@ The template can be manually invoked and deployed via Openshift CLI. For example
 export INSTANCE=master
 export NAMESPACE=ixhmbm-dev
 
-oc process -n $NAMESPACE -f logstash.bc.yaml -p INSTANCE=$INSTANCE -o yaml | oc -n $NAMESPACE create -f -
+oc process -n $NAMESPACE -f logstash.bc.yaml -p INSTANCE=$INSTANCE -o yaml | oc -n $NAMESPACE apply -f -
 ```
 
 Note that these build configurations do not have any triggers defined. They will be invoked by the Jenkins pipeline, started manually in the console, or by an equivalent oc command for example:
@@ -154,20 +154,26 @@ oc rollout -n $NAMESPACE latest dc/<buildname>-$INSTANCE
 
 ## Instance Cleanup
 
-In order to clear all resources for a specific instance, run the following two commands to delete all relevant resources from the Openshift project (replacing `INSTANCE` with the appropriate value):
+In order to clear all resources for a specific instance, run the following three commands to delete all relevant resources from the Openshift project:
 
 ``` bash
+export INSTANCE=master
 export NAMESPACE=ixhmbm-dev
 
-oc delete all,cm -n $NAMESPACE --selector app=elasticsearch-<INSTANCE>
-oc delete all,cm -n $NAMESPACE --selector app=kibana-<INSTANCE>
-oc delete all,cm -n $NAMESPACE --selector app=logstash-<INSTANCE>
+oc delete all,cm,pvc -n $NAMESPACE --selector app=elasticsearch-$INSTANCE
+oc delete all,cm -n $NAMESPACE --selector app=kibana-$INSTANCE
+oc delete all,cm -n $NAMESPACE --selector app=logstash-$INSTANCE
 ```
 
 If necessary, you can remove old secrets through the Openshift Web Console or its equivalent OC CLI command.
 
 ``` bash
-oc delete -n $NAMESPACE secret <secretname>
-```
+export APP_NAME=elasticsearch
+export INSTANCE=master
+export NAMESPACE=ixhmbm-dev
 
-*Note: Remember to swap out the bracketed values with the appropriate values!*
+oc delete -n $NAMESPACE secret $APP_NAME-$INSTANCE-certificates
+oc delete -n $NAMESPACE secret $APP_NAME-$INSTANCE-certificate-pem
+oc delete -n $NAMESPACE secret $APP_NAME-$INSTANCE-ca-pem
+oc delete -n $NAMESPACE secret $APP_NAME-$INSTANCE-credentials
+```
