@@ -1,6 +1,6 @@
-# Elastic Stack PoC
+# Hosted Application Logging & Performance Aggregation Services
 
-This repository contains Openshift Proof of Concept for the Elastic Stack (ElasticSearch, LogStash, Kibana).
+The Elastic Stack (Elasticsearch, Logstash and Kibana) run as a platform service for multiple apps with long term retention of performance metrics.
 
 ## Directory Structure
 
