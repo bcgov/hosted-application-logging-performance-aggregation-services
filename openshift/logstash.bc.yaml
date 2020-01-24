@@ -11,7 +11,7 @@ objects:
   - apiVersion: v1
     kind: ImageStream
     metadata:
-      name: ${APP_NAME}-${INSTANCE}-custom
+      name: ${APP_NAME}-custom
     spec:
       lookupPolicy:
         local: false
@@ -27,7 +27,7 @@ objects:
       output:
         to:
           kind: ImageStreamTag
-          name: "${APP_NAME}-${INSTANCE}-custom:${INSTANCE}"
+          name: "${APP_NAME}-custom:${INSTANCE}"
       postCommit: {}
       resources:
         limits:

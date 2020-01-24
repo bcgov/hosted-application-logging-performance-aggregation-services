@@ -230,7 +230,7 @@ objects:
                     secretKeyRef:
                       key: password
                       name: ${ELASTIC_NAME}-${INSTANCE}-credentials
-              image: docker-registry.default.svc:5000/${NAMESPACE}/${APP_NAME}-${INSTANCE}-custom:${INSTANCE}
+              image: docker-registry.default.svc:5000/${NAMESPACE}/${APP_NAME}-custom:${INSTANCE}
               imagePullPolicy: IfNotPresent
               livenessProbe:
                 failureThreshold: 3
