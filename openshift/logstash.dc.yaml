@@ -29,42 +29,100 @@ objects:
       name: ${APP_NAME}-${INSTANCE}-pipeline
     data:
       filter-json.conf: |
+        # Filter for Apache/Morgan combined
+        #
         filter {
           grok {
-            match => { "message" => "%{IP:[clogs][accessLog][client]} \- %{USER:[clogs][accessLog][remoteUser]} \[%{HTTPDATE:[clogs][accessLog][rawTimestamp]}\] \"%{WORD:[clogs][accessLog][method]} %{PATH:[clogs][accessLog][path]} HTTP\/%{DATA:[clogs][accessLog][httpVersion]}\" %{NUMBER:[clogs][accessLog][httpStatus]} %{NUMBER:[clogs][accessLog][contentLength]} \"%{DATA:[clogs][accessLog][referrer]}\" \"%{DATA:[clogs][accessLog][userAgent]}\"" }
+            match => { "[clogs][data][message]" => "%{IPORHOST:[clogs][accesslog][clientip]} %{USER:[clogs][accesslog][ident]} %{USER:[clogs][accesslog][auth]} \[%{HTTPDATE:[clogs][accesslog][timestamp]}\] \"(?:%{WORD:[clogs][accesslog][verb]} %{NOTSPACE:[clogs][accesslog][request]}(?: HTTP/%{NUMBER:[clogs][accesslog][httpversion]})?|%{DATA:[clogs][accesslog][rawrequest]})\" %{NUMBER:[clogs][accesslog][response]} (?:%{NUMBER:[clogs][accesslog][bytes]}|-) %{QS:[clogs][accesslog][referrer]} %{QS:[clogs][accesslog][agent]}" }
             tag_on_failure => []
+            add_tag => [ "accesslog_filter_combined" ]
           }
-          date {
-            match => [ "[clogs][accessLog][rawTimestamp]", "d/MMM/yyyy:HH:mm:ss Z" ]
-            target => "[clogs][accessLog][timestamp]"
-          }
-          if [clogs][accessLog][client] {
-            geoip {
-              source => "[clogs][accessLog][client]"
-              target => "[clogs][accessLog][geoip]"
+        }
+        # Filter for Apache/Morgan common
+        #
+        filter {
+          if ![clogs][accesslog] {
+            grok {
+              match => { "[clogs][data][message]" => "%{IPORHOST:[clogs][accesslog][clientip]} %{USER:[clogs][accesslog][ident]} %{USER:[clogs][accesslog][auth]} \[%{HTTPDATE:[clogs][accesslog][timestamp]}\] \"(?:%{WORD:[clogs][accesslog][verb]} %{NOTSPACE:[clogs][accesslog][request]}(?: HTTP/%{NUMBER:[clogs][accesslog][httpversion]})?|%{DATA:[clogs][accesslog][rawrequest]})\" %{NUMBER:[clogs][accesslog][response]} (?:%{NUMBER:[clogs][accesslog][bytes]}|-)" }
               tag_on_failure => []
+              add_tag => [ "accesslog_filter_common" ]
+            }
+          }
+        }
+        # Filter for Morgan short
+        #
+        filter {
+          if ![clogs][accesslog] {
+            grok {
+              match => { "[clogs][data][message]" => "%{IPORHOST:[clogs][accesslog][clientip]} %{USER:[clogs][accesslog][auth]} %{WORD:[clogs][accesslog][verb]} %{NOTSPACE:[clogs][accesslog][request]} HTTP/%{NUMBER:[clogs][accesslog][httpversion]} %{NUMBER:[clogs][accesslog][response]} (?:%{NUMBER:[clogs][accesslog][bytes]}|-) - %{NUMBER:[clogs][accesslog][responsetime]} ms" }
+              tag_on_failure => []
+              add_tag => [ "accesslog_filter_short" ]
+            }
+          }
+        }
+        # Filter for Morgan dev
+        #
+        filter {
+          if ![clogs][accesslog] {
+            grok {
+              match => { "[clogs][data][message]" => "%{WORD:[clogs][accesslog][verb]} %{NOTSPACE:[clogs][accesslog][request]} %{NUMBER:[clogs][accesslog][response]} %{NUMBER:[clogs][accesslog][responsetime]} ms - (?:%{NUMBER:[clogs][accesslog][bytes]}|-)" }
+              tag_on_failure => []
+              add_tag => [ "accesslog_filter_dev" ]
+            }
+          }
+        }
+        # Filter for Morgan tiny
+        #
+        filter {
+          if ![clogs][accesslog] {
+            grok {
+              match => { "[clogs][data][message]" => "%{WORD:[clogs][accesslog][verb]} %{NOTSPACE:[clogs][accesslog][request]} %{NUMBER:[clogs][accesslog][response]} (?:%{NUMBER:[clogs][accesslog][bytes]}|-) - %{NUMBER:[clogs][accesslog][responsetime]} ms" }
+              tag_on_failure => []
+              add_tag => [ "accesslog_filter_tiny" ]
             }
           }
         }
         filter {
-          grok {
-            match => { "message" => "%{DATA:[clogs][type]} %{DATA:[clogs][data][op]} %{DATA:[clogs][data][azp]} %{NUMBER:[clogs][ts]} %{NUMBER:[clogs][data][context][keyCount]} %{DATA:[clogs][data][content][fileType]} %{DATA:[clogs][data][content][encodingType]} %{NUMBER:[clogs][data][content][size]} %{DATA:[clogs][data][output][fileType]} %{NUMBER:[clogs][data][output][size]} %{NUMBER:[clogs][data][response][status]} %{NUMBER:[clogs][data][response][timeMs]}" }
-            tag_on_failure => []
+          if [clogs][accesslog] {
+            if [clogs][accesslog][clientip] {
+              geoip {
+                source => "[clogs][accesslog][clientip]"
+                target => "[clogs][accesslog][geoip]"
+                tag_on_failure => []
+              }
+            }
+            mutate { convert => { "[clogs][accesslog][httpversion]" => "float" } }
+            mutate { convert => { "[clogs][accesslog][response]" => "integer" } }
+            mutate { convert => { "[clogs][accesslog][bytes]" => "float" } }
+            date {
+              timezone => "UTC"
+              match => ["[clogs][accesslog][timestamp]", "UNIX_MS", "ISO8601", "dd/MMM/yyyy:HH:mm:ss Z"]
+              target => "[clogs][accesslog][@timestamp]"
+            }
+            if [clogs][accesslog][responsetime] {
+              mutate { convert => { "[clogs][accesslog][responsetime]" => "float" } }
+            }
           }
-          mutate { convert => { "[clogs][ts]" => "integer" } }
-          mutate { convert => { "[clogs][data][context][keyCount]" => "integer" } }
-          mutate { convert => { "[clogs][data][content][size]" => "float" } }
-          mutate { convert => { "[clogs][data][output][size]" => "float" } }
-          mutate { convert => { "[clogs][data][response][status]" => "integer" } }
-          mutate { convert => { "[clogs][data][response][timeMs]" => "float" } }
+        }
+        filter {
+          json {
+            source => "[clogs][data][message]"
+            skip_on_invalid_json => true
+            target => "[clogs][data]"
+            add_tag => [ "json_filter_message" ]
+          }
+        }
+        filter {
           date {
             timezone => "UTC"
-            match => ["[clogs][ts]", "UNIX_MS"]
-            target => "[clogs][timestamp]"
+            match => ["[clogs][timestamp]", "UNIX_MS"]
+            target => "[clogs][@timestamp]"
           }
-          mutate { add_field => { "[clogs][level]" => "info" } }
-          mutate { add_field => { "[@metadata][loglevel]" => "info" } }
-          mutate { add_field => { "[@metadata][index]" => "cdogs" } }
+        }
+        filter {
+          if [clogs][client] {
+            mutate { add_field => { "[@metadata][index]" => "%{[clogs][client]}" } }
+          }
         }
         filter {
           if ![@metadata][index] {
@@ -72,15 +130,21 @@ objects:
           }
         }
         filter {
-          if ![@metadata][loglevel] {
-            mutate { add_field => { "[@metadata][loglevel]" => "info" } }
+          if [clogs][retention] {
+            mutate { add_field => { "[@metadata][subindex]" => "%{[clogs][retention]}" } }
           }
         }
         filter {
-          json {
-            source => "message"
-            skip_on_invalid_json => true
-            target => "clogs"
+          if ![@metadata][subindex] {
+            mutate { add_field => { "[@metadata][subindex]" => "info" } }
+          }
+        }
+        filter {
+          if [@metadata][index] {
+            mutate { lowercase => ["[@metadata][index]"] }
+          }
+          if [@metadata][subindex] {
+            mutate { lowercase => ["[@metadata][subindex]"] }
           }
         }
       in-beats.conf: |
@@ -125,7 +189,7 @@ objects:
             ssl => true
             ssl_certificate_verification => true
             cacert => "/usr/share/logstash/config/certs/elasticsearch-ca.pem"
-            index => "%{[@metadata][index]}-%{[@metadata][loglevel]}-%{+YYYY.MM.dd}"
+            index => "%{[@metadata][index]}-%{[@metadata][subindex]}-%{+YYYY.MM.dd}"
           }
         }
       out-std.conf: |
