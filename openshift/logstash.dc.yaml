@@ -121,30 +121,63 @@ objects:
         }
         filter {
           if [clogs][client] {
-            mutate { add_field => { "[@metadata][index]" => "%{[clogs][client]}" } }
+            mutate {
+              add_field => { "[@metadata][clntidx]" => "%{[clogs][client]}" }
+              add_tag => [ "clogs_client_index" ]
+            }
           }
         }
         filter {
-          if ![@metadata][index] {
-            mutate { add_field => { "[@metadata][index]" => "logstash" } }
+          if ![@metadata][clntidx] {
+            mutate {
+              add_field => { "[@metadata][clntidx]" => "LOG_STASH" }
+              add_tag => [ "default_client_index" ]
+            }
+          }
+        }
+        filter {
+          if [clogs][env] {
+            mutate {
+              add_field => { "[@metadata][envidx]" => "%{[clogs][env]}" }
+              add_tag => [ "clogs_env_index" ]
+            }
+          }
+        }
+        filter {
+          if ![@metadata][envidx] {
+            mutate {
+              add_field => { "[@metadata][envidx]" => "dev" }
+              add_tag => [ "default_env_index" ]
+            }
           }
         }
         filter {
           if [clogs][retention] {
-            mutate { add_field => { "[@metadata][subindex]" => "%{[clogs][retention]}" } }
+            mutate {
+              add_field => { "[@metadata][rtnidx]" => "%{[clogs][retention]}" }
+              add_tag => [ "clogs_retention_index" ]
+            }
           }
         }
         filter {
-          if ![@metadata][subindex] {
-            mutate { add_field => { "[@metadata][subindex]" => "info" } }
+          if ![@metadata][rtnidx] {
+            mutate {
+              add_field => { "[@metadata][rtnidx]" => "default" }
+              add_tag => [ "default_retention_index" ]
+            }
           }
         }
         filter {
-          if [@metadata][index] {
-            mutate { lowercase => ["[@metadata][index]"] }
+          if [@metadata][clntidx] {
+            mutate { lowercase => ["[@metadata][clntidx]"] }
+            # remove all underscore
+            mutate { gsub => ["[@metadata][clntidx]", "_service_client", ""] }
           }
-          if [@metadata][subindex] {
-            mutate { lowercase => ["[@metadata][subindex]"] }
+          if [@metadata][envidx] {
+            mutate { lowercase => ["[@metadata][envidx]"] }
+          }
+          if [@metadata][rtnidx] {
+            mutate { lowercase => ["[@metadata][rtnidx]"] }
           }
         }
       in-beats.conf: |
@@ -189,7 +222,7 @@ objects:
             ssl => true
             ssl_certificate_verification => true
             cacert => "/usr/share/logstash/config/certs/elasticsearch-ca.pem"
-            index => "%{[@metadata][index]}-%{[@metadata][subindex]}-%{+YYYY.MM.dd}"
+            index => "%{[@metadata][clntidx]}-%{[@metadata][rtnidx]}-%{[@metadata][envidx]}-%{+YYYY.MM.dd}"
           }
         }
       out-std.conf: |
@@ -239,21 +272,6 @@ objects:
           port: 8080
           protocol: TCP
           targetPort: 8080
-      selector:
-        app: ${APP_NAME}-${INSTANCE}
-        env: ${LABEL_ENV}
-        role: ${APP_NAME}
-
-  - apiVersion: v1
-    kind: Service
-    metadata:
-      name: ${APP_NAME}-${INSTANCE}-tcp-plugin
-    spec:
-      ports:
-        - name: tcp-plugin
-          port: 11024
-          protocol: TCP
-          targetPort: 11024
       selector:
         app: ${APP_NAME}-${INSTANCE}
         env: ${LABEL_ENV}
@@ -334,8 +352,6 @@ objects:
                   name: beats-lugin
                 - containerPort: 8080
                   name: http-plugin
-                - containerPort: 11024
-                  name: tcp-plugin
               readinessProbe:
                 failureThreshold: 3
                 exec:
