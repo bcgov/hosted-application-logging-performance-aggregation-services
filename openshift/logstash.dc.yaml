@@ -29,58 +29,155 @@ objects:
       name: ${APP_NAME}-${INSTANCE}-pipeline
     data:
       filter-json.conf: |
+        # Filter for Apache/Morgan combined
+        #
         filter {
           grok {
-            match => { "message" => "%{IP:[clogs][accessLog][client]} \- %{USER:[clogs][accessLog][remoteUser]} \[%{HTTPDATE:[clogs][accessLog][rawTimestamp]}\] \"%{WORD:[clogs][accessLog][method]} %{PATH:[clogs][accessLog][path]} HTTP\/%{DATA:[clogs][accessLog][httpVersion]}\" %{NUMBER:[clogs][accessLog][httpStatus]} %{NUMBER:[clogs][accessLog][contentLength]} \"%{DATA:[clogs][accessLog][referrer]}\" \"%{DATA:[clogs][accessLog][userAgent]}\"" }
+            match => { "[clogs][data][message]" => "%{IPORHOST:[clogs][accesslog][clientip]} %{USER:[clogs][accesslog][ident]} %{USER:[clogs][accesslog][auth]} \[%{HTTPDATE:[clogs][accesslog][timestamp]}\] \"(?:%{WORD:[clogs][accesslog][verb]} %{NOTSPACE:[clogs][accesslog][request]}(?: HTTP/%{NUMBER:[clogs][accesslog][httpversion]})?|%{DATA:[clogs][accesslog][rawrequest]})\" %{NUMBER:[clogs][accesslog][response]} (?:%{NUMBER:[clogs][accesslog][bytes]}|-) %{QS:[clogs][accesslog][referrer]} %{QS:[clogs][accesslog][agent]}" }
             tag_on_failure => []
+            add_tag => [ "accesslog_filter_combined" ]
           }
-          date {
-            match => [ "[clogs][accessLog][rawTimestamp]", "d/MMM/yyyy:HH:mm:ss Z" ]
-            target => "[clogs][accessLog][timestamp]"
-          }
-          if [clogs][accessLog][client] {
-            geoip {
-              source => "[clogs][accessLog][client]"
-              target => "[clogs][accessLog][geoip]"
+        }
+        # Filter for Apache/Morgan common
+        #
+        filter {
+          if ![clogs][accesslog] {
+            grok {
+              match => { "[clogs][data][message]" => "%{IPORHOST:[clogs][accesslog][clientip]} %{USER:[clogs][accesslog][ident]} %{USER:[clogs][accesslog][auth]} \[%{HTTPDATE:[clogs][accesslog][timestamp]}\] \"(?:%{WORD:[clogs][accesslog][verb]} %{NOTSPACE:[clogs][accesslog][request]}(?: HTTP/%{NUMBER:[clogs][accesslog][httpversion]})?|%{DATA:[clogs][accesslog][rawrequest]})\" %{NUMBER:[clogs][accesslog][response]} (?:%{NUMBER:[clogs][accesslog][bytes]}|-)" }
               tag_on_failure => []
+              add_tag => [ "accesslog_filter_common" ]
+            }
+          }
+        }
+        # Filter for Morgan short
+        #
+        filter {
+          if ![clogs][accesslog] {
+            grok {
+              match => { "[clogs][data][message]" => "%{IPORHOST:[clogs][accesslog][clientip]} %{USER:[clogs][accesslog][auth]} %{WORD:[clogs][accesslog][verb]} %{NOTSPACE:[clogs][accesslog][request]} HTTP/%{NUMBER:[clogs][accesslog][httpversion]} %{NUMBER:[clogs][accesslog][response]} (?:%{NUMBER:[clogs][accesslog][bytes]}|-) - %{NUMBER:[clogs][accesslog][responsetime]} ms" }
+              tag_on_failure => []
+              add_tag => [ "accesslog_filter_short" ]
+            }
+          }
+        }
+        # Filter for Morgan dev
+        #
+        filter {
+          if ![clogs][accesslog] {
+            grok {
+              match => { "[clogs][data][message]" => "%{WORD:[clogs][accesslog][verb]} %{NOTSPACE:[clogs][accesslog][request]} %{NUMBER:[clogs][accesslog][response]} %{NUMBER:[clogs][accesslog][responsetime]} ms - (?:%{NUMBER:[clogs][accesslog][bytes]}|-)" }
+              tag_on_failure => []
+              add_tag => [ "accesslog_filter_dev" ]
+            }
+          }
+        }
+        # Filter for Morgan tiny
+        #
+        filter {
+          if ![clogs][accesslog] {
+            grok {
+              match => { "[clogs][data][message]" => "%{WORD:[clogs][accesslog][verb]} %{NOTSPACE:[clogs][accesslog][request]} %{NUMBER:[clogs][accesslog][response]} (?:%{NUMBER:[clogs][accesslog][bytes]}|-) - %{NUMBER:[clogs][accesslog][responsetime]} ms" }
+              tag_on_failure => []
+              add_tag => [ "accesslog_filter_tiny" ]
             }
           }
         }
         filter {
-          grok {
-            match => { "message" => "%{DATA:[clogs][type]} %{DATA:[clogs][data][op]} %{DATA:[clogs][data][azp]} %{NUMBER:[clogs][ts]} %{NUMBER:[clogs][data][context][keyCount]} %{DATA:[clogs][data][content][fileType]} %{DATA:[clogs][data][content][encodingType]} %{NUMBER:[clogs][data][content][size]} %{DATA:[clogs][data][output][fileType]} %{NUMBER:[clogs][data][output][size]} %{NUMBER:[clogs][data][response][status]} %{NUMBER:[clogs][data][response][timeMs]}" }
-            tag_on_failure => []
-          }
-          mutate { convert => { "[clogs][ts]" => "integer" } }
-          mutate { convert => { "[clogs][data][context][keyCount]" => "integer" } }
-          mutate { convert => { "[clogs][data][content][size]" => "float" } }
-          mutate { convert => { "[clogs][data][output][size]" => "float" } }
-          mutate { convert => { "[clogs][data][response][status]" => "integer" } }
-          mutate { convert => { "[clogs][data][response][timeMs]" => "float" } }
-          date {
-            timezone => "UTC"
-            match => ["[clogs][ts]", "UNIX_MS"]
-            target => "[clogs][timestamp]"
-          }
-          mutate { add_field => { "[clogs][level]" => "info" } }
-          mutate { add_field => { "[@metadata][loglevel]" => "info" } }
-          mutate { add_field => { "[@metadata][index]" => "cdogs" } }
-        }
-        filter {
-          if ![@metadata][index] {
-            mutate { add_field => { "[@metadata][index]" => "logstash" } }
-          }
-        }
-        filter {
-          if ![@metadata][loglevel] {
-            mutate { add_field => { "[@metadata][loglevel]" => "info" } }
+          if [clogs][accesslog] {
+            if [clogs][accesslog][clientip] {
+              geoip {
+                source => "[clogs][accesslog][clientip]"
+                target => "[clogs][accesslog][geoip]"
+                tag_on_failure => []
+              }
+            }
+            mutate { convert => { "[clogs][accesslog][httpversion]" => "float" } }
+            mutate { convert => { "[clogs][accesslog][response]" => "integer" } }
+            mutate { convert => { "[clogs][accesslog][bytes]" => "float" } }
+            date {
+              timezone => "UTC"
+              match => ["[clogs][accesslog][timestamp]", "UNIX_MS", "ISO8601", "dd/MMM/yyyy:HH:mm:ss Z"]
+              target => "[clogs][accesslog][@timestamp]"
+            }
+            if [clogs][accesslog][responsetime] {
+              mutate { convert => { "[clogs][accesslog][responsetime]" => "float" } }
+            }
           }
         }
         filter {
           json {
-            source => "message"
+            source => "[clogs][data][message]"
             skip_on_invalid_json => true
-            target => "clogs"
+            target => "[clogs][data]"
+            add_tag => [ "json_filter_message" ]
+          }
+        }
+        filter {
+          date {
+            timezone => "UTC"
+            match => ["[clogs][timestamp]", "UNIX_MS"]
+            target => "[clogs][@timestamp]"
+          }
+        }
+        filter {
+          if [clogs][client] {
+            mutate {
+              add_field => { "[@metadata][clntidx]" => "%{[clogs][client]}" }
+              add_tag => [ "clogs_client_index" ]
+            }
+          }
+        }
+        filter {
+          if ![@metadata][clntidx] {
+            mutate {
+              add_field => { "[@metadata][clntidx]" => "LOG_STASH" }
+              add_tag => [ "default_client_index" ]
+            }
+          }
+        }
+        filter {
+          if [clogs][env] {
+            mutate {
+              add_field => { "[@metadata][envidx]" => "%{[clogs][env]}" }
+              add_tag => [ "clogs_env_index" ]
+            }
+          }
+        }
+        filter {
+          if ![@metadata][envidx] {
+            mutate {
+              add_field => { "[@metadata][envidx]" => "dev" }
+              add_tag => [ "default_env_index" ]
+            }
+          }
+        }
+        filter {
+          if [clogs][retention] {
+            mutate {
+              add_field => { "[@metadata][rtnidx]" => "%{[clogs][retention]}" }
+              add_tag => [ "clogs_retention_index" ]
+            }
+          }
+        }
+        filter {
+          if ![@metadata][rtnidx] {
+            mutate {
+              add_field => { "[@metadata][rtnidx]" => "default" }
+              add_tag => [ "default_retention_index" ]
+            }
+          }
+        }
+        filter {
+          if [@metadata][clntidx] {
+            mutate { lowercase => ["[@metadata][clntidx]"] }
+            # remove all underscore
+            mutate { gsub => ["[@metadata][clntidx]", "_service_client", ""] }
+          }
+          if [@metadata][envidx] {
+            mutate { lowercase => ["[@metadata][envidx]"] }
+          }
+          if [@metadata][rtnidx] {
+            mutate { lowercase => ["[@metadata][rtnidx]"] }
           }
         }
       in-beats.conf: |
@@ -125,7 +222,7 @@ objects:
             ssl => true
             ssl_certificate_verification => true
             cacert => "/usr/share/logstash/config/certs/elasticsearch-ca.pem"
-            index => "%{[@metadata][index]}-%{[@metadata][loglevel]}-%{+YYYY.MM.dd}"
+            index => "%{[@metadata][clntidx]}-%{[@metadata][rtnidx]}-%{[@metadata][envidx]}-%{+YYYY.MM.dd}"
           }
         }
       out-std.conf: |
@@ -175,21 +272,6 @@ objects:
           port: 8080
           protocol: TCP
           targetPort: 8080
-      selector:
-        app: ${APP_NAME}-${INSTANCE}
-        env: ${LABEL_ENV}
-        role: ${APP_NAME}
-
-  - apiVersion: v1
-    kind: Service
-    metadata:
-      name: ${APP_NAME}-${INSTANCE}-tcp-plugin
-    spec:
-      ports:
-        - name: tcp-plugin
-          port: 11024
-          protocol: TCP
-          targetPort: 11024
       selector:
         app: ${APP_NAME}-${INSTANCE}
         env: ${LABEL_ENV}
@@ -270,8 +352,6 @@ objects:
                   name: beats-lugin
                 - containerPort: 8080
                   name: http-plugin
-                - containerPort: 11024
-                  name: tcp-plugin
               readinessProbe:
                 failureThreshold: 3
                 exec:
