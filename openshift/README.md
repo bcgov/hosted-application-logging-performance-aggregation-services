@@ -105,10 +105,10 @@ Note that these build configurations do not have any triggers defined. They will
 oc start-build -n $NAMESPACE <buildname> --follow
 ```
 
-The build config should write the resultant image to `<buildname>:$INSTANCE`, where the image name is buildname, and the tag is the specified INSTANCE. Depending on your build tooling, you may need to do the equivalent oc command for tag management:
+The build config should write the resultant image to `<imagename>:$INSTANCE`, where the image name is ${APP_NAME}-custom, and the tag is the specified INSTANCE. Depending on your build tooling, you may need to do the equivalent oc command for tag management:
 
 ``` bash
-oc tag -n $NAMESPACE <buildname>:latest <buildname>:$INSTANCE
+oc tag -n $NAMESPACE <imagename>:$INSTANCE <imagename>:latest
 ```
 
 *Note: Remember to swap out the bracketed values with the appropriate values!*

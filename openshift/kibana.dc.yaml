@@ -33,7 +33,7 @@ objects:
     metadata:
       name: ${APP_NAME}-${INSTANCE}
     spec:
-      host: ${APP_NAME}-${INSTANCE}-${NAMESPACE}.pathfinder.gov.bc.ca
+      host: ${HOST_ROUTE}
       port:
         targetPort: http
       tls:
@@ -186,6 +186,11 @@ parameters:
     displayName: Target Namespace
     required: true
     value: ixhmbm-dev
+  - name: HOST_ROUTE
+    description: The host the route will use to expose service outside cluster
+    displayName: Host route
+    required: true
+    value: kibana-dev.pathfinder.gov.bc.ca
   - name: CPU_LIMIT
     description: Limit Peak CPU per pod (in millicores ex. 1000m)
     displayName: CPU Limit
