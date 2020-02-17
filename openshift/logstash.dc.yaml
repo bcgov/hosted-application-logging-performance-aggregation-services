@@ -130,7 +130,7 @@ objects:
         filter {
           if ![@metadata][clntidx] {
             mutate {
-              add_field => { "[@metadata][clntidx]" => "LOG_STASH" }
+              add_field => { "[@metadata][clntidx]" => "LOGSTASH" }
               add_tag => [ "default_client_index" ]
             }
           }
@@ -234,7 +234,7 @@ objects:
     metadata:
       name: ${APP_NAME}-${INSTANCE}
     spec:
-      host: ${APP_NAME}-${INSTANCE}-${NAMESPACE}.pathfinder.gov.bc.ca
+      host: ${HOST_ROUTE}
       path: /http
       port:
         targetPort: http-plugin
@@ -243,7 +243,7 @@ objects:
         termination: edge
       to:
         kind: Service
-        name: ${APP_NAME}-${INSTANCE}-beats-http-plugin
+        name: ${APP_NAME}-${INSTANCE}-http
         weight: 100
       wildcardPolicy: None
 
@@ -265,7 +265,7 @@ objects:
   - apiVersion: v1
     kind: Service
     metadata:
-      name: ${APP_NAME}-${INSTANCE}-beats-http-plugin
+      name: ${APP_NAME}-${INSTANCE}-http
     spec:
       ports:
         - name: http-plugin
@@ -349,7 +349,7 @@ objects:
                 - containerPort: 9600
                   name: http
                 - containerPort: 5044
-                  name: beats-lugin
+                  name: beats-plugin
                 - containerPort: 8080
                   name: http-plugin
               readinessProbe:
@@ -458,6 +458,11 @@ parameters:
     displayName: Target Namespace
     required: true
     value: ixhmbm-dev
+  - name: HOST_ROUTE
+    description: The host the route will use to expose service outside cluster
+    displayName: Host route
+    required: true
+    value: logstash-dev.pathfinder.gov.bc.ca
   - name: CPU_LIMIT
     description: Limit Peak CPU per pod (in millicores ex. 1000m)
     displayName: CPU Limit
