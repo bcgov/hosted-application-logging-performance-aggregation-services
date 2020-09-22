@@ -1,6 +1,6 @@
 # Elastic Stack on Openshift
 
-This readme outlines how to setup and configure an Openshift project to get the Elastic Stack to a deployable state. This document assumes a working knowledge of Kubernetes/Openshift container orchestration concepts (i.e. buildconfigs, deployconfigs, imagestreams, secrets, configmaps, routes, etc)
+This section outlines how to setup and configure an Openshift project to get the Elastic Stack to a deployable state. This document assumes a working knowledge of Kubernetes/Openshift container orchestration concepts (i.e. buildconfigs, deployconfigs, imagestreams, secrets, configmaps, routes, etc)
 
 Our builds and deployments can be orchestrated with Jenkins. However at this time, all manifests are to be manually invoked.
 
@@ -177,3 +177,52 @@ oc delete -n $NAMESPACE secret $APP_NAME-$INSTANCE-certificate-pem
 oc delete -n $NAMESPACE secret $APP_NAME-$INSTANCE-ca-pem
 oc delete -n $NAMESPACE secret $APP_NAME-$INSTANCE-credentials
 ```
+
+# Fluentd for Processing logs
+
+We can use Fluentd to receive logs from other containers in other namespaces.
+These are the steps to build and deploy fluentd using openshift templates and CLI commands.
+Note: Fluentd is not currently integrated with the ELK stack described above
+
+## Build the fluentd image
+
+note: Run these commands from the project root directory
+
+``` bash
+export APP_NAME=fluentd
+export INSTANCE=master
+export NAMESPACE=ixhmbm-dev
+export HOST_ROUTE=fluentd-dev.pathfinder.gov.bc.ca
+
+#Create the imagestream:
+oc process -n $NAMESPACE -f openshift/fluentd.bc.yaml -p INSTANCE=$INSTANCE -o yaml | oc apply -n $NAMESPACE -f -
+
+# start the build:
+oc start-build -n $NAMESPACE $APP_NAME-$INSTANCE
+```
+
+## ConfigMaps and Secrets
+
+Create a ConfigMap from the file /openshift/fluent.conf
+note: config map Key for this file must be named 'fluent.conf'
+
+``` bash
+oc create -n $NAMESPACE configmap $APP_NAME-$INSTANCE-config --from-file=openshift/fluent.conf
+```
+
+### Secure the route to Fluentd (optional)
+
+To receive logs over http using TLS/SSL, un-commented the relevant sections in the DeploymentConfig.
+We can store SSL certificate in a secret with this command:
+
+``` bash
+oc create -n $NAMESPACE secret generic $APP_NAME-tls --from-file=ca.crt.pem=./certs/ca.crt.pem --from-file=server.crt.pem=./certs/server.crt.pem --from-file=server.key.pem=./private/server.key.pem
+```
+
+## Deployment
+
+``` bash
+oc process -n $NAMESPACE -f openshift/fluentd.dc.yaml -p INSTANCE=$INSTANCE -p NAMESPACE=$NAMESPACE -p APP_NAME=$APP_NAME -p HOST_ROUTE=$HOST_ROUTE -o yaml | oc apply -n $NAMESPACE -f -
+```
+
+This configuration of the Fluentd container receives logs from a fluent-bit sidecar that runs on someof our other applications, and outputs error notifications to the Showcase Team's Discord channel. For more information read about the monitoring stack on our [wiki](https://github.com/bcgov/nr-get-token/wiki/Fluentd-Fluent-bit).
