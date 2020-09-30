@@ -72,30 +72,30 @@ objects:
           terminationGracePeriodSeconds: 120
           containers:
             - image: docker-registry.default.svc:5000/${NAMESPACE}/${APP_NAME}:${INSTANCE}
-              name: "${APP_NAME}"
+              name: app
               imagePullPolicy: IfNotPresent
-              livenessProbe:
-                failureThreshold: 3
-                exec:
-                  command:
-                  - "/bin/sh"
-                  - "-c"
-                  - "[[ $( pgrep ruby | wc -l)  == 2 ]]"
-                initialDelaySeconds: 10
-                periodSeconds: 60
-                successThreshold: 1
-                timeoutSeconds: 1
-              readinessProbe:
-                failureThreshold: 3
-                exec:
-                  command:
-                  - "/bin/sh"
-                  - "-c"
-                  - "[[ $( pgrep ruby | wc -l)  == 2 ]]"
-                initialDelaySeconds: 10
-                periodSeconds: 10
-                successThreshold: 1
-                timeoutSeconds: 1
+              # livenessProbe:
+              #   failureThreshold: 3
+              #   exec:
+              #     command:
+              #     - "/bin/sh"
+              #     - "-c"
+              #     - "[[ $( pgrep ruby | wc -l)  == 2 ]]"
+              #   initialDelaySeconds: 10
+              #   periodSeconds: 60
+              #   successThreshold: 1
+              #   timeoutSeconds: 1
+              # readinessProbe:
+              #   failureThreshold: 3
+              #   exec:
+              #     command:
+              #     - "/bin/sh"
+              #     - "-c"
+              #     - "[[ $( pgrep ruby | wc -l)  == 2 ]]"
+              #   initialDelaySeconds: 10
+              #   periodSeconds: 10
+              #   successThreshold: 1
+              #   timeoutSeconds: 1
               resources:
                 requests:
                   cpu: "${CPU_REQUEST}"
@@ -125,7 +125,7 @@ objects:
           imageChangeParams:
             automatic: true
             containerNames:
-              - "${APP_NAME}"
+              - app
             from:
               kind: ImageStreamTag
               name: "${APP_NAME}-custom:${INSTANCE}"

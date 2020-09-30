@@ -221,6 +221,8 @@ oc create -n $NAMESPACE secret generic $APP_NAME-tls --from-file=ca.crt.pem=./ce
 
 ## Deployment
 
+Create the deployment in OpenShift by referencing the DeploymentConfig template in a local file
+
 ``` bash
 oc process -n $NAMESPACE -f openshift/fluentd.dc.yaml -p INSTANCE=$INSTANCE -p NAMESPACE=$NAMESPACE -p APP_NAME=$APP_NAME -p HOST_ROUTE=$HOST_ROUTE -o yaml | oc apply -n $NAMESPACE -f -
 ```
