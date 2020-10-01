@@ -74,28 +74,28 @@ objects:
             - image: docker-registry.default.svc:5000/${NAMESPACE}/${APP_NAME}:${INSTANCE}
               name: app
               imagePullPolicy: IfNotPresent
-              # livenessProbe:
-              #   failureThreshold: 3
-              #   exec:
-              #     command:
-              #     - "/bin/sh"
-              #     - "-c"
-              #     - "[[ $( pgrep ruby | wc -l)  == 2 ]]"
-              #   initialDelaySeconds: 10
-              #   periodSeconds: 60
-              #   successThreshold: 1
-              #   timeoutSeconds: 1
-              # readinessProbe:
-              #   failureThreshold: 3
-              #   exec:
-              #     command:
-              #     - "/bin/sh"
-              #     - "-c"
-              #     - "[[ $( pgrep ruby | wc -l)  == 2 ]]"
-              #   initialDelaySeconds: 10
-              #   periodSeconds: 10
-              #   successThreshold: 1
-              #   timeoutSeconds: 1
+              livenessProbe:
+                failureThreshold: 3
+                exec:
+                  command:
+                  - "/bin/bash"
+                  - "-c"
+                  - "[[ $( pgrep ruby | wc -l)  == 1 ]]"
+                initialDelaySeconds: 10
+                periodSeconds: 60
+                successThreshold: 1
+                timeoutSeconds: 1
+              readinessProbe:
+                failureThreshold: 3
+                exec:
+                  command:
+                  - "/bin/bash"
+                  - "-c"
+                  - "[[ $( pgrep ruby | wc -l)  == 1 ]]"
+                initialDelaySeconds: 10
+                periodSeconds: 10
+                successThreshold: 1
+                timeoutSeconds: 1
               resources:
                 requests:
                   cpu: "${CPU_REQUEST}"
