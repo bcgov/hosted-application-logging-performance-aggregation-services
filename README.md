@@ -1,4 +1,4 @@
-# Hosted Application Logging & Performance Aggregation Services [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE) [![img](https://img.shields.io/badge/Lifecycle-Dormant-ff7f2a)](https://github.com/bcgov/repomountie/blob/master/doc/lifecycle-badges.md)
+# Hosted Application Logging & Performance Aggregation Services [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE) [![img](https://img.shields.io/badge/Lifecycle-Retired-d45500)](https://github.com/bcgov/repomountie/blob/master/doc/lifecycle-badges.md)
 
 The Elastic Stack (Elasticsearch, Logstash and Kibana) run as a platform service for multiple apps with long term retention of performance metrics.
 
